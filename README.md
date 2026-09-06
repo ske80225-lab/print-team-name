@@ -138,6 +138,10 @@ index.html          画面（Tesseract.js を CDN から読み込み）
 styles.css          スタイル
 app.js              取り込み・抽出・OCR・A4出力
 collect.js          取り込みブックマークレットの中身（読む用）
+favicon-16.png      ファビコン（16px）
+favicon-32.png      ファビコン（32px）
+icon-192.png        ファビコン（192px）
+apple-touch-icon.png ホーム画面用アイコン（512px）
 .nojekyll           Jekyll処理を無効化
 README.md           この文書
 _backup_20260906/   Figmaでのデザイン更新前のファイル一式（Git管理外）
