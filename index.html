@@ -41,13 +41,35 @@
   </div>
 
   <div class="bar">
-    <button class="primary" id="dl" disabled>A4用HTMLをダウンロード</button>
+    <button class="primary" id="print" disabled>このまま印刷（スマホOK）</button>
+    <button id="dl" disabled>A4用HTMLをダウンロード</button>
     <button id="open" disabled>新しいタブで開いて印刷</button>
     <button id="add" disabled>行を追加</button>
   </div>
 
   <div id="listWrap"><p class="empty">まだ何も読み込まれていません。</p></div>
+
+  <section class="card manual">
+    <h2>手動で追加</h2>
+    <div class="manual-row">
+      <button type="button" id="manualPick" class="logo-pick" aria-label="エンブレムを選択">
+        <img id="manualPreview" alt="" hidden>
+        <span id="manualPickLabel">エンブレム<br>を選ぶ</span>
+      </button>
+      <input type="file" id="manualLogo" accept="image/*" hidden>
+      <div class="manual-fields">
+        <input type="text" id="manualName" placeholder="チーム名" autocomplete="off">
+        <div class="bar" style="margin:0">
+          <input type="text" id="manualRank" placeholder="順位（任意）" class="rank-in">
+          <button class="primary" id="manualAdd">一覧に追加</button>
+        </div>
+      </div>
+    </div>
+    <p class="note" id="manualNote">エンブレムは正方形に整えて埋め込まれます（画像だけ・名前だけでも追加できます）。</p>
+  </section>
 </main>
+
+<div id="printArea" aria-hidden="true"></div>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="app.js"></script>
 </body>

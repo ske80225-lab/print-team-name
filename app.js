@@ -485,7 +485,7 @@ function render(){
   listWrap.appendChild(t);
   toggle(true);
 }
-function toggle(enabled){ ['#dl','#open','#add'].forEach(s => { const el = $(s); if (el) el.disabled = !enabled; }); }
+function toggle(enabled){ ['#print','#dl','#open','#add'].forEach(s => { const el = $(s); if (el) el.disabled = !enabled; }); }
 
 /* ---------- チーム名の一括流し込み ---------- */
 // macOS のテキスト認識表示で拾った文字列をそのまま受ける想定。順位の数字や
@@ -608,11 +608,13 @@ on('#bulkClear', 'click', () => { $('#bulk').value = ''; setStatus(''); });
 on('#add', 'click', () => { items.push({rank:'', name:'', logo:null}); render(); });
 
 /* ---------- A4出力 ---------- */
-function buildHTML(){
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// 紙面の中身。別タブ用のHTMLと、このページでそのまま印刷する分で同じものを使う。
+function sheetInner(){
   const title = $('#title').value || '';
   const cols = Math.min(3, Math.max(1, +$('#cols').value || 2));
   const per = Math.ceil(items.length / cols);
-  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   // 順位が1件も入っていない一覧では、順位の列ごと省いて名前に幅を回す。
   const hasRank = items.some(it => String(it.rank ?? '').trim() !== '');
 
@@ -632,6 +634,16 @@ ${rows}
     </table>\n`;
   }
 
+  return `<div class="sheet">
+  <h1>${esc(title)}</h1>
+  <p class="sub">全${items.length}件</p>
+  <div class="grid" style="grid-template-columns:repeat(${cols},1fr)">
+${tables}  </div>
+</div>`;
+}
+
+function buildHTML(){
+  const title = $('#title').value || '';
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -649,7 +661,7 @@ ${rows}
   .sheet{width:188mm;margin:0 auto;}
   h1{font-size:13pt;font-weight:600;margin:0 0 1mm;letter-spacing:.03em;}
   .sub{font-size:8pt;color:#6b7280;margin:0 0 3.5mm;}
-  .grid{display:grid;grid-template-columns:repeat(${cols},1fr);column-gap:5mm;}
+  .grid{display:grid;column-gap:5mm;}
   table{width:100%;border-collapse:collapse;table-layout:fixed;}
   col.c-rank{width:9mm;} col.c-lg{width:15mm;}
   td{border:1px solid var(--line);height:12.4mm;vertical-align:middle;padding:0;background:#fff;}
@@ -660,12 +672,7 @@ ${rows}
 </style>
 </head>
 <body>
-<div class="sheet">
-  <h1>${esc(title)}</h1>
-  <p class="sub">全${items.length}件</p>
-  <div class="grid">
-${tables}  </div>
-</div>
+${sheetInner()}
 </body>
 </html>`;
 }
@@ -685,3 +692,87 @@ on('#open', 'click', () => {
   w.document.write(buildHTML());
   w.document.close();
 });
+
+
+/* ---------- このまま印刷（スマホ対応） ---------- */
+// スマホのブラウザは window.open + document.write をブロックすることが多い。
+// 同じ紙面をこのページの中に組み、ブラウザの印刷機能へ直接渡す。
+async function waitImages(root){
+  const imgs = [...root.querySelectorAll('img')].filter(im => !im.complete);
+  if (!imgs.length) return;
+  await Promise.race([
+    Promise.all(imgs.map(im => new Promise(r => { im.onload = im.onerror = r; }))),
+    new Promise(r => setTimeout(r, 6000))
+  ]);
+}
+
+on('#print', 'click', async () => {
+  if (!items.length){ setStatus('先に一覧を作ってください。', true); return; }
+  const area = $('#printArea');
+  area.innerHTML = sheetInner();
+  setStatus('印刷の準備中…');
+  await waitImages(area);
+  setStatus('印刷ダイアログを開きました。出ない場合はブラウザの共有メニューから「プリント」を選んでください。');
+  window.print();
+});
+
+/* ---------- 手動で追加 ---------- */
+let manualLogo = null;
+
+on('#manualPick', 'click', () => $('#manualLogo').click());
+
+on('#manualLogo', 'change', async e => {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';                       // 同じ画像をもう一度選べるように
+  if (!f) return;
+  try {
+    const img = await loadImage(f);
+    manualLogo = squarePNG(img);
+    const pv = $('#manualPreview');
+    pv.src = manualLogo; pv.hidden = false;
+    $('#manualPickLabel').hidden = true;
+    setStatus('エンブレムを読み込みました。チーム名を入れて「一覧に追加」を押してください。');
+  } catch (err){
+    console.error(err);
+    setStatus('画像を読み込めませんでした。', true);
+  }
+});
+
+// 印刷の枠は正方形。余白を足して縦横を揃えておくと、行ごとに大きさがぶれない。
+function squarePNG(img){
+  const w = img.naturalWidth, h = img.naturalHeight, s = Math.max(w, h);
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 200;
+  const cx = cv.getContext('2d');
+  cx.imageSmoothingQuality = 'high';
+  const k = 200 / s;
+  cx.drawImage(img, (200 - w*k)/2, (200 - h*k)/2, w*k, h*k);
+  return cv.toDataURL('image/png');
+}
+
+function clearManual(){
+  manualLogo = null;
+  const pv = $('#manualPreview');
+  pv.removeAttribute('src'); pv.hidden = true;
+  $('#manualPickLabel').hidden = false;
+  $('#manualName').value = '';
+  $('#manualRank').value = '';
+}
+
+function manualAdd(){
+  const name = $('#manualName').value.trim();
+  const rank = $('#manualRank').value.trim();
+  if (!name && !manualLogo){
+    setStatus('チーム名かエンブレムのどちらかを入れてください。', true);
+    return;
+  }
+  items.push({ rank, name, logo: manualLogo });
+  render();
+  clearManual();
+  setStatus(`手動で1件追加しました（全${items.length}件）。`);
+  $('#manualName').focus();
+}
+
+on('#manualAdd', 'click', manualAdd);
+on('#manualName', 'keydown', e => { if (e.key === 'Enter') manualAdd(); });
+on('#manualRank', 'keydown', e => { if (e.key === 'Enter') manualAdd(); });
