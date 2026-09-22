@@ -519,7 +519,8 @@ function logoFromTeamUrl(teamUrl){
   return 'https://s.yimg.jp/images/sports/soccer/' + m[1] + '/logo/team/120/' + m[2] + '.png';
 }
 
-function parseStandings(md){
+// スポーツナビ: 表（`|` 区切り）の行にチームへのリンクが残る。
+function parseSportsnavi(md){
   const rows = [], seen = new Set();
   for (const line of md.split('\n')){
     if (line.indexOf('|') < 0) continue;          // 表の行だけ見る（ナビのリンクを拾わない）
@@ -533,6 +534,35 @@ function parseStandings(md){
     rows.push({ rank: '', name: cleanName(last[1]), logo: logoFromTeamUrl(last[2]) });
   }
   return rows;
+}
+
+// Flashscore: 表ではなく「1.」の行 → チームの行 の順に並ぶ。
+// エンブレムは Markdown に画像として出てくるので、そのURLをそのまま使う。
+//   [![Image 3: チーム名](https://static.flashscore.com/…png)](…/team/slug/ID/ "チーム名")[チーム名](…/team/slug/ID/)
+function parseFlashscore(md){
+  const rows = [], seen = new Set();
+  let rank = '';
+  for (const line of md.split('\n')){
+    const r = /^\s*(\d+)\.\s*$/.exec(line);
+    if (r){ rank = r[1]; continue; }              // 直前に出た順位を次のチーム行に付ける
+    const re = /\[([^\[\]!][^\[\]]*)\]\((https?:\/\/[^)\s]*flashscore[^)\s]*\/team\/[^)\s]+)\)/g;
+    let m, last = null;
+    while ((m = re.exec(line))) if (cleanName(m[1])) last = m;
+    if (!last) continue;
+    const id = last[2].replace(/\/+$/, '');
+    if (seen.has(id)) continue;                   // 同じページの別の表（日程や得点者）に出てくる分
+    seen.add(id);
+    const img = /!\[[^\]]*\]\((https?:\/\/[^)\s]+\.(?:png|svg|gif|jpe?g|webp)[^)\s]*)\)/i.exec(line);
+    rows.push({ rank: rank, name: cleanName(last[1]), logo: img ? img[1] : null });
+    rank = '';
+  }
+  return rows;
+}
+
+// サイトごとに表の作りが違うので、順に試して最初に取れたものを使う。
+function parseStandings(md){
+  const rows = parseSportsnavi(md);
+  return rows.length ? rows : parseFlashscore(md);
 }
 
 on('#grabRun', 'click', async () => {
